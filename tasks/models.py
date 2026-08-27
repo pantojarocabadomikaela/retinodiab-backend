@@ -4,7 +4,7 @@ from django.contrib.auth.hashers import check_password
 # Crea los modelos de datos de los usuarios
 
 class User(models.Model):
-    email = models.CharField(max_length = 40)
+    email = models.CharField(max_length = 40, unique = True)
     nombre = models.CharField(max_length = 40)
     password = models.CharField(max_length = 40)
     rol = models.CharField(max_length = 40)
