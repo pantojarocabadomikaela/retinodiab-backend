@@ -1,0 +1,14 @@
+# Dependencias mínimas para probar el módulo de IA P0 Fold 4
+# Instalación:
+#   python -m pip install -r requirements.txt
+#
+# Las versiones de PyTorch/TorchVision se fijan para coincidir con el
+# entorno de entrenamiento, omitiendo el sufijo local +cu128 para que
+# pip pueda resolver la distribución disponible para tu sistema.
+
+torch==2.11.0
+torchvision==0.26.0
+
+numpy>=1.26,<3
+opencv-python>=4.8,<5
+Pillow>=10,<13
