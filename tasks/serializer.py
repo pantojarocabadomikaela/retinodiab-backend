@@ -8,7 +8,11 @@ class UserSerializer(serializers.ModelSerializer):
     email = serializers.CharField(validators=[])
 
     def validate_email(self, value):
-        if User.objects.filter(email=value).exists():
+        queryset = User.objects.filter(email=value)
+        if self.instance is not None:
+            queryset = queryset.exclude(pk=self.instance.pk)
+
+        if queryset.exists():
             raise serializers.ValidationError('email duplicado')
         return value
 
