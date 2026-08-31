@@ -1,1 +1,3 @@
-/tasks/iamodels
+__pycache__/
+*.pyc
+/tasks/ai/z0_*

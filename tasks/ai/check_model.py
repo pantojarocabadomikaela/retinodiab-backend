@@ -1,12 +1,4 @@
-"""
-Smoke test aislado del modelo P0 Fold 4.
-
-Ejecutar desde la raíz del backend:
-
-    python -m tasks.ai.check_model
-
-No necesita iniciar Django ni modificar views.py.
-"""
+"""Smoke test del checkpoint P2 Green + CLAHE — Fold 2."""
 
 import torch
 import torchvision
@@ -16,7 +8,7 @@ from .model_loader import get_model_bundle
 
 
 def main() -> None:
-    print("=== P0 Fold 4 — model loading smoke test ===")
+    print("=== P2 Fold 2 — model loading smoke test ===")
     print("Runtime PyTorch:", torch.__version__)
     print("Runtime TorchVision:", torchvision.__version__)
 
@@ -25,9 +17,7 @@ def main() -> None:
     device = bundle.device
 
     total_params = sum(p.numel() for p in model.parameters())
-    trainable_params = sum(
-        p.numel() for p in model.parameters() if p.requires_grad
-    )
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
     print("Checkpoint:", bundle.checkpoint_path)
     print("Device:", device)
@@ -39,11 +29,9 @@ def main() -> None:
     print("Trainable params:", f"{trainable_params:,}")
     print("Classifier:", model.classifier)
 
-    expected_params = 4_013_953
-    if total_params != expected_params:
+    if total_params != 4_013_953:
         raise RuntimeError(
-            f"Número de parámetros incorrecto: {total_params:,}; "
-            f"esperado: {expected_params:,}."
+            f"Parámetros incorrectos: {total_params:,}; esperado: 4,013,953."
         )
 
     x = torch.zeros(
@@ -51,7 +39,6 @@ def main() -> None:
         dtype=torch.float32,
         device=device,
     )
-
     with torch.inference_mode():
         logits = model(x)
 
@@ -60,10 +47,7 @@ def main() -> None:
     print("Logits finite:", bool(torch.isfinite(logits).all().item()))
 
     if tuple(logits.shape) != (1, NUM_CLASSES):
-        raise RuntimeError(
-            f"Shape de logits incorrecto: {tuple(logits.shape)}."
-        )
-
+        raise RuntimeError(f"Shape de logits incorrecto: {tuple(logits.shape)}.")
     if not torch.isfinite(logits).all():
         raise RuntimeError("Los logits contienen NaN o Inf.")
 
