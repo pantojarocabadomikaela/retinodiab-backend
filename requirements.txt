@@ -7,6 +7,11 @@
 # entorno de entrenamiento, omitiendo el sufijo local +cu128 para que
 # pip pueda resolver la distribución disponible para tu sistema.
 
+Django>=5.0,<5.1
+djangorestframework>=3.14,<3.16
+django-cors-headers>=4.3,<5.0
+gunicorn>=22.0,<24.0
+
 torch==2.11.0
 torchvision==0.26.0
 

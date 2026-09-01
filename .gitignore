@@ -1,3 +1,5 @@
+/tasks/iamodels
+db.sqlite3
 __pycache__/
 *.pyc
 /tasks/ai/z0_*
