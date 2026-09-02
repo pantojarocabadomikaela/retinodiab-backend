@@ -1,15 +1,8 @@
 """
-Carga reproducible de P0 RGB Baseline — Fold 4.
+Carga reproducible de P2 Green + CLAHE — Fold 2.
 
-Responsabilidades:
-- reconstruir torchvision EfficientNetB0 sin descargar pesos;
-- sustituir classifier[1] por Linear(1280, 5);
-- cargar model_state_dict desde best_val_loss.pt con strict=True;
-- validar metadatos esenciales del checkpoint;
-- seleccionar CPU/CUDA;
-- mantener el modelo cargado en memoria mediante lazy loading.
-
-No realiza preprocessing ni inferencia de probabilidades.
+La arquitectura sigue siendo torchvision EfficientNetB0 sin MSAG.
+El cambio P1 -> P2 está exclusivamente en preprocessing (CLAHE).
 """
 
 from dataclasses import dataclass
@@ -25,19 +18,27 @@ from torchvision.models import efficientnet_b0
 
 from .config import (
     ARCHITECTURE,
+    CANDIDATE_CODE,
+    CHANNEL_REPLICATION,
+    CLAHE_CLIP_LIMIT,
+    CLAHE_TILE_GRID,
     CV_FOLD,
     EXPERIMENT_NAME,
+    GEOMETRY,
+    MEDIAN_KERNEL,
     MSAG_ENABLED,
+    NORMALIZATION,
     NUM_CLASSES,
+    OPERATION_ORDER,
+    PREPROCESSING_PROTOCOL_SHA256,
+    RESIZE_INTERPOLATION,
 )
 
 
-# Ruta portable respecto al propio paquete:
-# tasks/ai/model_loader.py -> tasks/iamodels/p0_fold4/best_val_loss.pt
 DEFAULT_CHECKPOINT_PATH = (
     Path(__file__).resolve().parents[1]
     / "iamodels"
-    / "p0_fold4"
+    / "p2_fold2"
     / "best_val_loss.pt"
 )
 
@@ -48,8 +49,6 @@ class ModelLoadingError(RuntimeError):
 
 @dataclass
 class ModelBundle:
-    """Modelo ya cargado junto con información útil de deployment."""
-
     model: nn.Module
     device: torch.device
     checkpoint_path: Path
@@ -64,133 +63,128 @@ _bundle_lock = Lock()
 
 
 def select_device() -> torch.device:
-    """
-    Selecciona CUDA si está disponible; de lo contrario usa CPU.
-
-    Para una demo académica EfficientNetB0 puede ejecutarse en CPU.
-    """
     return torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def build_model() -> nn.Module:
-    """
-    Reconstruye EXACTAMENTE la topología del baseline P0.
-
-    Importante:
-    weights=None evita una descarga de ImageNet durante deployment.
-    El checkpoint ya contiene todos los pesos entrenados.
-    """
+    """Reconstruye EfficientNetB0 + Linear(1280, 5), sin descargar ImageNet."""
     model = efficientnet_b0(weights=None)
 
     if not isinstance(model.classifier, nn.Sequential):
-        raise ModelLoadingError(
-            "La estructura de classifier de EfficientNetB0 no es la esperada."
-        )
-
+        raise ModelLoadingError("Classifier de EfficientNetB0 inesperado.")
     if len(model.classifier) < 2 or not isinstance(model.classifier[1], nn.Linear):
-        raise ModelLoadingError(
-            "No se encontró classifier[1] como capa Linear."
-        )
+        raise ModelLoadingError("No se encontró classifier[1] como Linear.")
 
     in_features = model.classifier[1].in_features
-
     if in_features != 1280:
         raise ModelLoadingError(
-            f"EfficientNetB0 inesperado: classifier in_features={in_features}, "
-            "se esperaba 1280."
+            f"classifier in_features={in_features}; se esperaba 1280."
         )
 
-    # Conserva classifier[0] = Dropout(p=0.2) de TorchVision.
     model.classifier[1] = nn.Linear(in_features, NUM_CLASSES)
-
     return model
 
 
 def _validate_checkpoint_metadata(checkpoint: dict) -> None:
-    """
-    Comprueba que el archivo parece corresponder al P0 Fold 4 esperado.
-
-    No se usa la config del checkpoint para cambiar dinámicamente la
-    arquitectura: el deployment permanece explícito y reproducible.
-    """
+    """Rechaza checkpoints que no correspondan exactamente a P2 Fold 2."""
     if "model_state_dict" not in checkpoint:
-        raise ModelLoadingError(
-            "El checkpoint no contiene la clave 'model_state_dict'."
-        )
+        raise ModelLoadingError("Falta 'model_state_dict' en el checkpoint.")
 
     config = checkpoint.get("config")
-
     if not isinstance(config, dict):
-        raise ModelLoadingError(
-            "El checkpoint no contiene un bloque 'config' válido."
-        )
+        raise ModelLoadingError("El checkpoint no contiene 'config' válido.")
 
-    observed_fold = config.get("cv_fold")
-    if observed_fold != CV_FOLD:
+    if config.get("cv_fold") != CV_FOLD:
         raise ModelLoadingError(
-            f"Checkpoint de fold incorrecto: {observed_fold}; "
+            f"Checkpoint de fold incorrecto: {config.get('cv_fold')}; "
             f"se esperaba Fold {CV_FOLD}."
         )
-
-    observed_experiment = config.get("experiment")
-    if observed_experiment != "RGB baseline EfficientNetB0 pretrained":
+    if config.get("candidate_code") != CANDIDATE_CODE:
         raise ModelLoadingError(
-            "El checkpoint no corresponde al experimento RGB baseline esperado. "
-            f"Observado: {observed_experiment!r}."
+            f"Candidate incorrecto: {config.get('candidate_code')!r}; "
+            f"se esperaba {CANDIDATE_CODE!r}."
+        )
+    if config.get("experiment") != EXPERIMENT_NAME:
+        raise ModelLoadingError(
+            f"Experimento inesperado: {config.get('experiment')!r}."
         )
 
     model_cfg = config.get("model", {})
-    observed_architecture = model_cfg.get("architecture")
-    observed_num_classes = model_cfg.get("num_classes")
-    observed_msag = model_cfg.get("msag")
-
-    if observed_architecture != ARCHITECTURE:
+    if model_cfg.get("architecture") != ARCHITECTURE:
         raise ModelLoadingError(
-            f"Arquitectura inesperada: {observed_architecture!r}; "
-            f"esperada: {ARCHITECTURE!r}."
+            f"Arquitectura inesperada: {model_cfg.get('architecture')!r}."
+        )
+    if model_cfg.get("num_classes") != NUM_CLASSES:
+        raise ModelLoadingError(
+            f"Número de clases inesperado: {model_cfg.get('num_classes')}."
+        )
+    if bool(model_cfg.get("msag")) != MSAG_ENABLED:
+        raise ModelLoadingError(
+            f"Estado MSAG inesperado: {model_cfg.get('msag')}."
+        )
+    if model_cfg.get("total_parameters") not in (None, 4_013_953):
+        raise ModelLoadingError(
+            f"Número de parámetros registrado inesperado: "
+            f"{model_cfg.get('total_parameters')}."
         )
 
-    if observed_num_classes != NUM_CLASSES:
-        raise ModelLoadingError(
-            f"Número de clases inesperado: {observed_num_classes}; "
-            f"esperado: {NUM_CLASSES}."
-        )
+    input_cfg = config.get("input", {})
+    checks = {
+        "candidate_code": (input_cfg.get("candidate_code"), CANDIDATE_CODE),
+        "use_clahe": (input_cfg.get("use_clahe"), True),
+        "clahe_clip_limit": (
+            float(input_cfg.get("clahe_clip_limit", -1)),
+            float(CLAHE_CLIP_LIMIT),
+        ),
+        "clahe_tile_grid": (
+            tuple(input_cfg.get("clahe_tile_grid", [])),
+            tuple(CLAHE_TILE_GRID),
+        ),
+        "median_kernel": (input_cfg.get("median_kernel"), MEDIAN_KERNEL),
+        "operation_order": (input_cfg.get("operation_order"), OPERATION_ORDER),
+        "geometry": (input_cfg.get("geometry"), GEOMETRY),
+        "resize_interpolation": (
+            input_cfg.get("resize_interpolation"),
+            RESIZE_INTERPOLATION,
+        ),
+        "channel_replication": (
+            input_cfg.get("channel_replication"),
+            CHANNEL_REPLICATION,
+        ),
+        "normalization": (input_cfg.get("normalization"), NORMALIZATION),
+    }
+    for name, (observed, expected) in checks.items():
+        if observed != expected:
+            raise ModelLoadingError(
+                f"Metadata P2 incompatible en {name}: "
+                f"observed={observed!r}, expected={expected!r}."
+            )
 
-    if bool(observed_msag) != MSAG_ENABLED:
+    lock = config.get("preprocessing_protocol_lock", {})
+    observed_hash = lock.get("canonical_sha256")
+    if observed_hash != PREPROCESSING_PROTOCOL_SHA256:
         raise ModelLoadingError(
-            f"Estado MSAG inesperado: {observed_msag}; "
-            f"esperado: {MSAG_ENABLED}."
+            "SHA256 del protocolo de preprocessing no coincide: "
+            f"{observed_hash!r}."
         )
 
 
 def _warn_if_runtime_differs(checkpoint: dict) -> None:
-    """
-    Informa si PyTorch/TorchVision difieren de las versiones de entrenamiento.
-
-    Una diferencia de versión no implica por sí sola incompatibilidad.
-    La prueba decisiva es que load_state_dict(strict=True) y el forward pass
-    funcionen correctamente.
-    """
     config = checkpoint.get("config", {})
-
     train_torch = config.get("torch_version")
     train_torchvision = config.get("torchvision_version")
 
-    runtime_torch = torch.__version__
-    runtime_torchvision = torchvision.__version__
-
-    if train_torch and train_torch != runtime_torch:
+    if train_torch and train_torch != torch.__version__:
         warnings.warn(
             "Versión de PyTorch distinta a la de entrenamiento: "
-            f"training={train_torch}, runtime={runtime_torch}.",
+            f"training={train_torch}, runtime={torch.__version__}.",
             RuntimeWarning,
             stacklevel=2,
         )
-
-    if train_torchvision and train_torchvision != runtime_torchvision:
+    if train_torchvision and train_torchvision != torchvision.__version__:
         warnings.warn(
             "Versión de TorchVision distinta a la de entrenamiento: "
-            f"training={train_torchvision}, runtime={runtime_torchvision}.",
+            f"training={train_torchvision}, runtime={torchvision.__version__}.",
             RuntimeWarning,
             stacklevel=2,
         )
@@ -200,12 +194,6 @@ def load_model_bundle(
     checkpoint_path: Union[Path, str] = DEFAULT_CHECKPOINT_PATH,
     device: Optional[torch.device] = None,
 ) -> ModelBundle:
-    """
-    Reconstruye y carga una instancia nueva del modelo.
-
-    Esta función es útil para tests. Para el servidor Django debe preferirse
-    get_model_bundle(), que reutiliza una única instancia en memoria.
-    """
     checkpoint_path = Path(checkpoint_path).resolve()
 
     if not checkpoint_path.is_file():
@@ -213,14 +201,13 @@ def load_model_bundle(
             "No se encontró el checkpoint en:\n"
             f"{checkpoint_path}\n\n"
             "Ubicación esperada por defecto:\n"
-            "tasks/iamodels/p0_fold4/best_val_loss.pt"
+            "tasks/iamodels/p2_fold2/best_val_loss.pt"
         )
 
     if device is None:
         device = select_device()
 
     try:
-        # El archivo es un checkpoint propio y confiable del proyecto.
         checkpoint = torch.load(
             checkpoint_path,
             map_location="cpu",
@@ -232,39 +219,30 @@ def load_model_bundle(
         ) from exc
 
     if not isinstance(checkpoint, dict):
-        raise ModelLoadingError(
-            "El contenido del .pt no es el diccionario de checkpoint esperado."
-        )
+        raise ModelLoadingError("El .pt no contiene el diccionario esperado.")
 
     _validate_checkpoint_metadata(checkpoint)
     _warn_if_runtime_differs(checkpoint)
 
     model = build_model()
-
     try:
-        # strict=True es deliberado: no aceptamos capas faltantes o sobrantes.
         incompatible = model.load_state_dict(
             checkpoint["model_state_dict"],
             strict=True,
         )
     except Exception as exc:
         raise ModelLoadingError(
-            "El model_state_dict no es compatible con la arquitectura "
-            "EfficientNetB0 P0 esperada."
+            "model_state_dict incompatible con EfficientNetB0 P2."
         ) from exc
 
-    # Con strict=True normalmente este objeto ya estará vacío, pero se
-    # comprueba de forma explícita para documentar el contrato.
     if incompatible.missing_keys or incompatible.unexpected_keys:
         raise ModelLoadingError(
-            "Carga no estricta detectada inesperadamente. "
             f"missing_keys={incompatible.missing_keys}; "
             f"unexpected_keys={incompatible.unexpected_keys}"
         )
 
     model.to(device)
     model.eval()
-
     config = checkpoint.get("config", {})
 
     return ModelBundle(
@@ -279,20 +257,9 @@ def load_model_bundle(
 
 
 def get_model_bundle() -> ModelBundle:
-    """
-    Lazy loading thread-safe para Django.
-
-    Primera llamada:
-        construye + carga el modelo.
-
-    Llamadas posteriores:
-        reutilizan la misma instancia residente en RAM/VRAM.
-    """
     global _bundle
-
     if _bundle is None:
         with _bundle_lock:
             if _bundle is None:
                 _bundle = load_model_bundle()
-
     return _bundle

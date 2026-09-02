@@ -1,4 +1,5 @@
 # Dependencias mínimas para probar el módulo de IA P0 Fold 4
+# Usando Python 3.11.16
 # Instalación:
 #   python -m pip install -r requirements.txt
 #
@@ -17,3 +18,7 @@ torchvision==0.26.0
 numpy>=1.26,<3
 opencv-python>=4.8,<5
 Pillow>=10,<13
+
+Django>=5.2,<5.3
+djangorestframework>=3.18,<3.19
+django-cors-headers>=4.4,<5
