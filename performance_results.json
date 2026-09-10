@@ -1,0 +1,197 @@
+{
+  "generated_at_utc": "2026-09-10T16:14:20.513086+00:00",
+  "iterations": 5,
+  "warmup_iterations": 1,
+  "image_path": "/app/test_images/000c1434d8d7.png",
+  "image_size_bytes": 3218676,
+  "model_id": "aptos2019_p2_green_clahe_efficientnetb0_fold2",
+  "device": "cpu",
+  "python_version": "3.11.16",
+  "django_version": "5.0.14",
+  "torch_version": "2.11.0+cu130",
+  "platform": "Linux-5.15.146.1-microsoft-standard-WSL2-x86_64-with-glibc2.41",
+  "notes": [
+    "Tiempos medidos con time.perf_counter_ns y expresados en milisegundos.",
+    "La carga inicial del modelo se mide una sola vez.",
+    "La respuesta completa incluye el time.sleep(5) configurado en evaluateImage.",
+    "La base de datos del benchmark es independiente de db.sqlite3."
+  ],
+  "results": [
+    {
+      "operation": "Creación de usuario",
+      "description": "Base de datos y hash de contraseña",
+      "samples_ms": [
+        160.956865,
+        148.542624,
+        151.460665,
+        151.225938,
+        138.487063
+      ],
+      "iterations": 5,
+      "mean_ms": 150.134631,
+      "median_ms": 151.225938,
+      "min_ms": 138.487063,
+      "max_ms": 160.956865,
+      "p95_ms": 160.956865,
+      "stdev_ms": 7.187077
+    },
+    {
+      "operation": "Autenticación",
+      "description": "Consulta de usuario y verificación del hash",
+      "samples_ms": [
+        131.17492,
+        135.58511,
+        130.507832,
+        127.017271,
+        142.37924
+      ],
+      "iterations": 5,
+      "mean_ms": 133.332875,
+      "median_ms": 131.17492,
+      "min_ms": 127.017271,
+      "max_ms": 142.37924,
+      "p95_ms": 142.37924,
+      "stdev_ms": 5.280791
+    },
+    {
+      "operation": "Decodificación de imagen",
+      "description": "Bytes de imagen a matriz RGB",
+      "samples_ms": [
+        202.009588,
+        153.849956,
+        137.144521,
+        165.369101,
+        140.241498
+      ],
+      "iterations": 5,
+      "mean_ms": 159.722933,
+      "median_ms": 153.849956,
+      "min_ms": 137.144521,
+      "max_ms": 202.009588,
+      "p95_ms": 202.009588,
+      "stdev_ms": 23.425812
+    },
+    {
+      "operation": "Preprocesamiento",
+      "description": "Canal verde, CLAHE, resize y normalización",
+      "samples_ms": [
+        202.789671,
+        174.879352,
+        171.739933,
+        171.832029,
+        189.167662
+      ],
+      "iterations": 5,
+      "mean_ms": 182.081729,
+      "median_ms": 174.879352,
+      "min_ms": 171.739933,
+      "max_ms": 202.789671,
+      "p95_ms": 202.789671,
+      "stdev_ms": 12.189443
+    },
+    {
+      "operation": "Carga inicial del modelo",
+      "description": "Lectura del checkpoint y construcción de EfficientNetB0",
+      "samples_ms": [
+        429.530055
+      ],
+      "iterations": 1,
+      "mean_ms": 429.530055,
+      "median_ms": 429.530055,
+      "min_ms": 429.530055,
+      "max_ms": 429.530055,
+      "p95_ms": 429.530055,
+      "stdev_ms": 0.0
+    },
+    {
+      "operation": "Inferencia del modelo",
+      "description": "Forward pass y Softmax con el modelo ya cargado",
+      "samples_ms": [
+        19.054661,
+        17.203692,
+        22.862132,
+        22.46975,
+        22.708773
+      ],
+      "iterations": 5,
+      "mean_ms": 20.859802,
+      "median_ms": 22.46975,
+      "min_ms": 17.203692,
+      "max_ms": 22.862132,
+      "p95_ms": 22.862132,
+      "stdev_ms": 2.30849
+    },
+    {
+      "operation": "Pipeline IA completo",
+      "description": "Preprocesamiento, inferencia y construcción de la clasificación",
+      "samples_ms": [
+        364.647109,
+        305.847114,
+        315.978378,
+        263.808226,
+        261.880288
+      ],
+      "iterations": 5,
+      "mean_ms": 302.432223,
+      "median_ms": 305.847114,
+      "min_ms": 261.880288,
+      "max_ms": 364.647109,
+      "p95_ms": 364.647109,
+      "stdev_ms": 37.95293
+    },
+    {
+      "operation": "Almacenamiento de diagnóstico",
+      "description": "Codificación Base64 ya realizada y escritura en SQLite",
+      "samples_ms": [
+        94.734567,
+        94.308604,
+        89.229169,
+        93.653446,
+        89.869597
+      ],
+      "iterations": 5,
+      "mean_ms": 92.359077,
+      "median_ms": 93.653446,
+      "min_ms": 89.229169,
+      "max_ms": 94.734567,
+      "p95_ms": 94.734567,
+      "stdev_ms": 2.328641
+    },
+    {
+      "operation": "Consulta del historial",
+      "description": "GET /api/v1/diagnosticos/ y serialización de resultados",
+      "samples_ms": [
+        217.020029,
+        179.972187,
+        177.014093,
+        189.702899,
+        214.059598
+      ],
+      "iterations": 5,
+      "mean_ms": 195.553761,
+      "median_ms": 189.702899,
+      "min_ms": 177.014093,
+      "max_ms": 217.020029,
+      "p95_ms": 217.020029,
+      "stdev_ms": 16.876042
+    },
+    {
+      "operation": "Respuesta completa del diagnóstico",
+      "description": "POST, espera configurada, IA, almacenamiento y respuesta JSON",
+      "samples_ms": [
+        5272.468354,
+        5384.185807,
+        5306.876484,
+        5319.536599,
+        5347.114616
+      ],
+      "iterations": 5,
+      "mean_ms": 5326.036372,
+      "median_ms": 5319.536599,
+      "min_ms": 5272.468354,
+      "max_ms": 5384.185807,
+      "p95_ms": 5384.185807,
+      "stdev_ms": 37.694907
+    }
+  ]
+}
